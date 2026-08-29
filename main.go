@@ -141,7 +141,9 @@ type App struct {
 	pdfSkipExistingOCR bool              // Whether to skip processing PDFs that already have OCR detected
 	autoTagComplete    string            // Tag to add to documents after auto-processing is complete
 	ocrProviderLabel   string            // Human-readable provider description for run records ("llm (ollama/minicpm-v)")
-	ocrFailures        ocrFailureTracker // Per-document OCR failure counts for the auto-OCR poll
+	ocrFailures          ocrFailureTracker // Per-document OCR failure counts for the auto-OCR poll
+	autoTagCooldownUntil time.Time         // Time until auto-tagging is paused due to rate limiting
+	autoTagCooldownMu    sync.RWMutex      // Mutex protecting autoTagCooldownUntil
 }
 
 func main() {

@@ -15,6 +15,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tmc/langchaingo/llms"
 	"gorm.io/gorm"
 )
 
@@ -579,6 +580,33 @@ func (r *recordingClient) GetDocumentsByTag(ctx context.Context, tag string, pag
 	return r.taggedDocuments[tag], nil
 }
 
+func (r *recordingClient) GetDocument(ctx context.Context, documentID int) (Document, error) {
+	for _, docs := range r.taggedDocuments {
+		for _, doc := range docs {
+			if doc.ID == documentID {
+				return doc, nil
+			}
+		}
+	}
+	return Document{ID: documentID}, nil
+}
+
+func (r *recordingClient) GetCustomFields(ctx context.Context) ([]CustomField, error) {
+	return nil, nil
+}
+
+func (r *recordingClient) GetAllTags(ctx context.Context) (map[string]int, error) {
+	return map[string]int{"tag1": 1}, nil
+}
+
+func (r *recordingClient) GetAllCorrespondents(ctx context.Context) (map[string]int, error) {
+	return map[string]int{"corr1": 1}, nil
+}
+
+func (r *recordingClient) GetAllDocumentTypes(ctx context.Context) ([]DocumentType, error) {
+	return nil, nil
+}
+
 // callsFor filters the recorded UpdateDocuments suggestions by document ID.
 func (r *recordingClient) callsFor(documentID int) []DocumentSuggestion {
 	var out []DocumentSuggestion
@@ -595,6 +623,96 @@ func (r *recordingClient) callsFor(documentID int) []DocumentSuggestion {
 // re-processed on the next poll) and adds the fail tag (so the user can find
 // the document later in the UI). This is the loop-break behaviour relied upon
 // by both processAutoTagDocuments and processAutoOcrTagDocuments.
+func TestIsRateLimitError(t *testing.T) {
+	testCases := []struct {
+		err      error
+		expected bool
+	}{
+		{nil, false},
+		{errors.New("connection reset by peer"), false},
+		{errors.New("you (user) have reached your weekly usage limit, upgrade for higher limits"), true},
+		{errors.New("HTTP 429 Too Many Requests"), true},
+		{errors.New("Error: rate limit exceeded"), true},
+		{errors.New("quota_exceeded for resource"), true},
+		{errors.New("RESOURCE_EXHAUSTED: quota reached"), true},
+	}
+
+	for _, tc := range testCases {
+		res := isRateLimitError(tc.err)
+		assert.Equal(t, tc.expected, res, "expected %v for error: %v", tc.expected, tc.err)
+	}
+}
+
+func TestProcessAutoTagDocuments_RateLimitCooldown(t *testing.T) {
+	var err error
+	titleTemplate, err = template.New("title").Funcs(sprig.FuncMap()).Parse("")
+	require.NoError(t, err)
+	tagTemplate, err = template.New("tag").Funcs(sprig.FuncMap()).Parse("")
+	require.NoError(t, err)
+	correspondentTemplate, err = template.New("correspondent").Funcs(sprig.FuncMap()).Parse("")
+	require.NoError(t, err)
+	createdDateTemplate, err = template.New("created_date").Funcs(sprig.FuncMap()).Parse("")
+	require.NoError(t, err)
+	documentTypeTemplate, err = template.New("document_type").Funcs(sprig.FuncMap()).Parse("")
+	require.NoError(t, err)
+
+	prevAutoTag := autoTag
+	t.Cleanup(func() { autoTag = prevAutoTag })
+	autoTag = "paperless-gpt-auto"
+
+	doc1 := Document{ID: 101, Title: "Doc 1", Tags: []string{autoTag}}
+	doc2 := Document{ID: 102, Title: "Doc 2", Tags: []string{autoTag}}
+
+	client := &recordingClient{
+		taggedDocuments: map[string][]Document{
+			autoTag: {doc1, doc2},
+		},
+	}
+
+	// Create an LLM mock that returns a rate limit error
+	rateLimitErr := errors.New("you (user) have reached your weekly usage limit, upgrade for higher limits: https://ollama.com/upgrade")
+
+	// Create test app with mock LLM and client
+	app := &App{
+		Client: client,
+		LLM:    &failingLLM{err: rateLimitErr},
+	}
+
+	ctx := context.Background()
+
+	// First call should hit rate limit error on first document, set cooldown, and return 0
+	count, err := app.processAutoTagDocuments(ctx)
+	assert.NoError(t, err, "rate limit error should pause auto-tagging without surfacing as loop error")
+	assert.Equal(t, 0, count)
+
+	// Verify cooldown is set in app
+	app.autoTagCooldownMu.RLock()
+	cooldownUntil := app.autoTagCooldownUntil
+	app.autoTagCooldownMu.RUnlock()
+	assert.True(t, cooldownUntil.After(time.Now()), "cooldown should be set in the future")
+
+	// Verify client was NOT called to remove tag or add fail tag
+	assert.Empty(t, client.calls, "no tag updates should be made on rate limit error")
+
+	// Second call while in cooldown should skip immediately
+	count2, err2 := app.processAutoTagDocuments(ctx)
+	assert.NoError(t, err2)
+	assert.Equal(t, 0, count2)
+}
+
+// failingLLM implements llms.Model for testing rate limit error handling
+type failingLLM struct {
+	err error
+}
+
+func (f *failingLLM) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
+	return "", f.err
+}
+
+func (f *failingLLM) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
+	return nil, f.err
+}
+
 func TestRecoverFromFailedUpdate(t *testing.T) {
 	prevFailTag := failTag
 	t.Cleanup(func() { failTag = prevFailTag })
