@@ -12,6 +12,33 @@ import (
 	"gorm.io/gorm"
 )
 
+// isRateLimitError checks if an error message indicates a rate limit or usage quota exhaustion
+// (e.g. Ollama weekly usage limit, 429 Too Many Requests, quota exceeded).
+func isRateLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := strings.ToLower(err.Error())
+	rateLimitPhrases := []string{
+		"weekly usage limit",
+		"upgrade for higher limits",
+		"rate limit",
+		"rate_limit",
+		"ratelimit",
+		"quota exceeded",
+		"quota_exceeded",
+		"too many requests",
+		"resource_exhausted",
+		"429",
+	}
+	for _, phrase := range rateLimitPhrases {
+		if strings.Contains(errStr, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 // ocrFailureTracker counts consecutive OCR-processing failures per document so
 // the poll loop can stop retrying a document that keeps failing (and re-paying
 // the OCR provider for it every cycle). Counts are in-memory only: a restart
@@ -200,6 +227,15 @@ func recoverFromFailedUpdate(ctx context.Context, client ClientInterface, db *go
 
 // processAutoTagDocuments handles the background auto-tagging of documents
 func (app *App) processAutoTagDocuments(ctx context.Context) (int, error) {
+	app.autoTagCooldownMu.RLock()
+	cooldownUntil := app.autoTagCooldownUntil
+	app.autoTagCooldownMu.RUnlock()
+
+	if time.Now().Before(cooldownUntil) {
+		log.Debugf("Auto-tagging is in cooldown due to rate limiting until %v, skipping cycle", cooldownUntil.Format(time.RFC3339))
+		return 0, nil
+	}
+
 	documents, err := app.Client.GetDocumentsByTag(ctx, autoTag, 25)
 	if err != nil {
 		return 0, fmt.Errorf("error fetching documents with autoTag: %w", err)
@@ -254,6 +290,18 @@ func (app *App) processAutoTagDocuments(ctx context.Context) (int, error) {
 
 		suggestions, err := app.generateDocumentSuggestions(ctx, suggestionRequest, docLogger)
 		if err != nil {
+			if isRateLimitError(err) {
+				cooldownDuration := 1 * time.Hour
+				until := time.Now().Add(cooldownDuration)
+
+				app.autoTagCooldownMu.Lock()
+				app.autoTagCooldownUntil = until
+				app.autoTagCooldownMu.Unlock()
+
+				docLogger.Warnf("Auto-tagging hit rate/quota limit (%v); pausing auto-tagging for %v (until %v). OCR processing will continue.", err, cooldownDuration, until.Format(time.RFC3339))
+				return processedCount, nil
+			}
+
 			err = fmt.Errorf("error generating suggestions for document %d: %w", document.ID, err)
 			docLogger.Error(err.Error())
 			errs = append(errs, err)
