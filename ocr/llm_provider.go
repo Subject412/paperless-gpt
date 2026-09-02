@@ -83,13 +83,15 @@ func newLLMProvider(config Config) (*LLMProvider, error) {
 	}
 
 	// Apply rate limiting and retry wrapper if configured
-	if config.VisionLLMRequestsPerMinute > 0 || config.VisionLLMMaxRetries > 0 {
+	if config.VisionLLMRequestInterval > 0 || config.VisionLLMRequestsPerMinute > 0 || config.VisionLLMMaxRetries > 0 {
 		rateConfig := RateLimitConfig{
+			RequestInterval:   config.VisionLLMRequestInterval,
 			RequestsPerMinute: config.VisionLLMRequestsPerMinute,
 			MaxRetries:        config.VisionLLMMaxRetries,
 			BackoffMaxWait:    config.VisionLLMBackoffMaxWait,
 		}
 		logger.WithFields(logrus.Fields{
+			"interval":    config.VisionLLMRequestInterval,
 			"rpm":         config.VisionLLMRequestsPerMinute,
 			"max_retries": config.VisionLLMMaxRetries,
 		}).Info("Wrapping vision LLM model with rate limiter")

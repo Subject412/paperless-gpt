@@ -55,6 +55,18 @@ func parseCommaSeparated(s string) []string {
 	return result
 }
 
+// TruncateForLog truncates string s to maxLen characters for clean logging output.
+// If maxLen <= 0, a default limit of 300 characters is used.
+func TruncateForLog(s string, maxLen int) string {
+	if maxLen <= 0 {
+		maxLen = 300
+	}
+	if len(s) <= maxLen {
+		return s
+	}
+	return fmt.Sprintf("%s... [truncated %d chars]", s[:maxLen], len(s)-maxLen)
+}
+
 // parseSemicolonSeparated splits by semicolon and trims whitespace
 func parseSemicolonSeparated(s string) []string {
 	parts := strings.Split(s, ";")

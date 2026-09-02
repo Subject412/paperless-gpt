@@ -700,6 +700,53 @@ func TestProcessAutoTagDocuments_RateLimitCooldown(t *testing.T) {
 	assert.Equal(t, 0, count2)
 }
 
+func TestProcessAutoOcrTagDocuments_RateLimitCooldown(t *testing.T) {
+	prevAutoOcrTag := autoOcrTag
+	t.Cleanup(func() { autoOcrTag = prevAutoOcrTag })
+	autoOcrTag = "paperless-gpt-ocr-auto"
+
+	doc1 := Document{ID: 201, Title: "Doc 1", Tags: []string{autoOcrTag}}
+	doc2 := Document{ID: 202, Title: "Doc 2", Tags: []string{autoOcrTag}}
+
+	client := &recordingClient{
+		taggedDocuments: map[string][]Document{
+			autoOcrTag: {doc1, doc2},
+		},
+	}
+
+	rateLimitErr := errors.New("HTTP 429 Too Many Requests: rate limit exceeded")
+	processor := &mockDocumentProcessor{
+		mockErr: rateLimitErr,
+	}
+
+	app := &App{
+		Client:       client,
+		docProcessor: processor,
+		Database:     newOCRRunTestDB(t),
+	}
+
+	ctx := context.Background()
+
+	// First call should hit rate limit error, set OCR cooldown, and return 0
+	count, err := app.processAutoOcrTagDocuments(ctx)
+	assert.NoError(t, err, "rate limit error should pause auto-OCR without surfacing as loop error")
+	assert.Equal(t, 0, count)
+
+	// Verify cooldown is set in app
+	app.autoOcrCooldownMu.RLock()
+	cooldownUntil := app.autoOcrCooldownUntil
+	app.autoOcrCooldownMu.RUnlock()
+	assert.True(t, cooldownUntil.After(time.Now()), "auto-OCR cooldown should be set in the future")
+
+	// Verify client was NOT called to remove tag or add fail tag
+	assert.Empty(t, client.calls, "no tag updates should be made on rate limit error")
+
+	// Second call while in cooldown should skip immediately
+	count2, err2 := app.processAutoOcrTagDocuments(ctx)
+	assert.NoError(t, err2)
+	assert.Equal(t, 0, count2)
+}
+
 // failingLLM implements llms.Model for testing rate limit error handling
 type failingLLM struct {
 	err error

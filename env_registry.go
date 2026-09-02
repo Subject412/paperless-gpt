@@ -71,7 +71,8 @@ var envRegistry = []EnvVar{
 	{Name: "LLM_MAX_RETRIES", Category: "LLM", Secret: false, Default: "3", Description: "Maximum retry attempts for failed main LLM requests."},
 	{Name: "LLM_MODEL", Category: "LLM", Secret: false, Default: "", Description: "AI model name (e.g., `gpt-4o`, `mistral-large-latest`, `qwen3:8b`, `claude-sonnet-4-5`)."},
 	{Name: "LLM_PROVIDER", Category: "LLM", Secret: false, Default: "", Description: "AI backend (`openai`, `ollama`, `googleai`, `mistral`, or `anthropic`)."},
-	{Name: "LLM_REQUESTS_PER_MINUTE", Category: "LLM", Secret: false, Default: "120", Description: "Maximum requests per minute for the main LLM. Useful for managing API costs or local LLM load."},
+	{Name: "LLM_REQUEST_RATE", Category: "LLM", Secret: false, Default: "500ms", Description: "Maximum request rate or minimum interval between requests for the main LLM (e.g. '500ms', '10s', '30m', '1h', '1d', '2/h', '30/m'). Plain numbers are treated as seconds."},
+	{Name: "LLM_REQUESTS_PER_MINUTE", Category: "LLM", Secret: false, Default: "120", Description: "(Deprecated: use LLM_REQUEST_RATE instead) Maximum requests per minute for the main LLM. Useful for managing API costs or local LLM load."},
 	{Name: "LOCAL_HOCR_PATH", Category: "PDF & hOCR", Secret: false, Default: "/app/hocr", Description: "Path where hOCR files will be saved when hOCR generation is enabled."},
 	{Name: "LOCAL_PDF_PATH", Category: "PDF & hOCR", Secret: false, Default: "/app/pdf", Description: "Path where PDF files will be saved when PDF generation is enabled."},
 	{Name: "LOG_LEVEL", Category: "Server & container", Secret: false, Default: "info", Description: "Application log level (`info`, `debug`, `warn`, `error`)."},
@@ -113,6 +114,7 @@ var envRegistry = []EnvVar{
 	{Name: "VISION_LLM_MAX_TOKENS", Category: "OCR", Secret: false, Default: "", Description: "Maximum tokens for Vision LLM OCR output."},
 	{Name: "VISION_LLM_MODEL", Category: "OCR", Secret: false, Default: "", Description: "Model name for LLM OCR (e.g. `minicpm-v`). Required if OCR_PROVIDER is `llm`."},
 	{Name: "VISION_LLM_PROVIDER", Category: "OCR", Secret: false, Default: "", Description: "AI backend for LLM OCR (`openai`, `ollama`, `mistral`, or `anthropic`). Required if OCR_PROVIDER is `llm`."},
-	{Name: "VISION_LLM_REQUESTS_PER_MINUTE", Category: "OCR", Secret: false, Default: "120", Description: "Maximum requests per minute for the Vision LLM. Useful for managing API costs or local LLM load."},
+	{Name: "VISION_LLM_REQUEST_RATE", Category: "OCR", Secret: false, Default: "500ms", Description: "Maximum request rate or minimum interval between requests for the Vision LLM (e.g. '500ms', '10s', '30m', '1h', '1d', '2/h', '30/m'). Plain numbers are treated as seconds."},
+	{Name: "VISION_LLM_REQUESTS_PER_MINUTE", Category: "OCR", Secret: false, Default: "120", Description: "(Deprecated: use VISION_LLM_REQUEST_RATE instead) Maximum requests per minute for the Vision LLM. Useful for managing API costs or local LLM load."},
 	{Name: "VISION_LLM_TEMPERATURE", Category: "OCR", Secret: false, Default: "", Description: "Sampling temperature for Vision OCR generation. Lower is more deterministic. Important: For OpenAI GPT-5 it must be explicitly set to `1.0`."},
 }

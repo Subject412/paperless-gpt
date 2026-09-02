@@ -54,7 +54,7 @@ func (app *App) getSuggestedCorrespondent(ctx context.Context, content string, s
 	}
 
 	prompt := promptBuffer.String()
-	log.Debugf("Correspondent suggestion prompt: %s", prompt)
+	log.Debugf("Correspondent suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -124,7 +124,7 @@ func (app *App) getSuggestedTags(
 	}
 
 	prompt := promptBuffer.String()
-	logger.Debugf("Tag suggestion prompt: %s", prompt)
+	logger.Debugf("Tag suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -232,7 +232,7 @@ func (app *App) getSuggestedDocumentType(
 	}
 
 	prompt := promptBuffer.String()
-	logger.Debugf("Document type suggestion prompt: %s", prompt)
+	logger.Debugf("Document type suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -302,7 +302,7 @@ func (app *App) getSuggestedTitle(ctx context.Context, content string, originalT
 	}
 
 	prompt := promptBuffer.String()
-	logger.Debugf("Title suggestion prompt: %s", prompt)
+	logger.Debugf("Title suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -358,7 +358,7 @@ func (app *App) getSuggestedCreatedDate(ctx context.Context, content string, log
 	}
 
 	prompt := promptBuffer.String()
-	logger.Debugf("CreatedDate suggestion prompt: %s", prompt)
+	logger.Debugf("CreatedDate suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -463,7 +463,7 @@ func (app *App) getSuggestedCustomFields(ctx context.Context, doc Document, sele
 	}
 
 	prompt := promptBuffer.String()
-	logger.Debugf("Custom field suggestion prompt: %s", prompt)
+	logger.Debugf("Custom field suggestion prompt: %s", sanitize.TruncateForLog(prompt, 300))
 
 	completion, err := app.LLM.GenerateContent(ctx, []llms.MessageContent{
 		{
@@ -479,7 +479,7 @@ func (app *App) getSuggestedCustomFields(ctx context.Context, doc Document, sele
 
 	response := textsanitize.StripReasoning(completion.Choices[0].Content)
 	response = stripMarkdown(response)
-	logger.Debugf("LLM response for custom fields: %s", response)
+	logger.Debugf("LLM response for custom fields: %s", sanitize.TruncateForLog(response, 300))
 
 	// Temporary struct to unmarshal LLM response with field name
 	type LLMCustomFieldResponse struct {
@@ -495,7 +495,7 @@ func (app *App) getSuggestedCustomFields(ctx context.Context, doc Document, sele
 
 	err = json.Unmarshal([]byte(response), &llmSuggestedFields)
 	if err != nil {
-		logger.Errorf("Error unmarshalling custom fields JSON from LLM response: %v. Response: %s", err, response)
+		logger.Errorf("Error unmarshalling custom fields JSON from LLM response: %v. Response: %s", err, sanitize.TruncateForLog(response, 300))
 		return []CustomFieldSuggestion{}, nil // Return empty slice on parsing error
 	}
 
