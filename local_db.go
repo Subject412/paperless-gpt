@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // ModificationHistory represents the schema of the modification_history table
@@ -44,8 +45,11 @@ func InitializeDB() *gorm.DB {
 
 	dbPath := filepath.Join(dbDir, "modification_history.db")
 
-	// Connect to SQLite database
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	// Connect to SQLite database with Error log level so expected 'record not found'
+	// query misses don't print full SQL traces to stdout at info log level.
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Error),
+	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

@@ -883,7 +883,9 @@ func (client *PaperlessClient) UpdateDocuments(ctx context.Context, documents []
 					continue // Already handled in separate update above
 				}
 			}
-			log.Printf("Document %d: Updated %s from %v to %v", documentID, field, value, updatedFields[field])
+			oldStr := sanitize.TruncateForLog(fmt.Sprintf("%v", value), 100)
+			newStr := sanitize.TruncateForLog(fmt.Sprintf("%v", updatedFields[field]), 100)
+			log.Infof("Document %d: Updated %s from %s to %s", documentID, field, oldStr, newStr)
 			mod := ModificationHistory{
 				DocumentID:    uint(documentID),
 				ModField:      field,
@@ -894,7 +896,7 @@ func (client *PaperlessClient) UpdateDocuments(ctx context.Context, documents []
 				return fmt.Errorf("error inserting modification record for document %d: %w", documentID, err)
 			}
 		}
-		log.Printf("Document %d updated successfully.", documentID)
+		log.Infof("Document %d updated successfully.", documentID)
 	}
 	if firstPartial != nil {
 		return firstPartial

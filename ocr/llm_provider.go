@@ -227,7 +227,16 @@ func (p *LLMProvider) ProcessImage(ctx context.Context, imageContent []byte, pag
 		GenerationInfo: completion.Choices[0].GenerationInfo,
 	}
 
-	logger.WithField("content_length", len(result.Text)).WithFields(completion.Choices[0].GenerationInfo).Info("Successfully processed image")
+	genInfoFields := make(logrus.Fields)
+	for k, v := range completion.Choices[0].GenerationInfo {
+		if s, ok := v.(string); ok {
+			genInfoFields[k] = sanitize.TruncateForLog(s, 100)
+		} else {
+			genInfoFields[k] = v
+		}
+	}
+
+	logger.WithField("content_length", len(result.Text)).WithFields(genInfoFields).Info("Successfully processed image")
 	return result, nil
 }
 
