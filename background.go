@@ -341,6 +341,15 @@ func (app *App) processAutoTagDocuments(ctx context.Context) (int, error) {
 
 // processAutoOcrTagDocuments handles the background auto-tagging of OCR documents
 func (app *App) processAutoOcrTagDocuments(ctx context.Context) (int, error) {
+	app.autoOcrCooldownMu.RLock()
+	cooldownUntil := app.autoOcrCooldownUntil
+	app.autoOcrCooldownMu.RUnlock()
+
+	if time.Now().Before(cooldownUntil) {
+		log.Debugf("Auto-OCR is in cooldown due to rate limiting until %v, skipping cycle", cooldownUntil.Format(time.RFC3339))
+		return 0, nil
+	}
+
 	documents, err := app.Client.GetDocumentsByTag(ctx, autoOcrTag, 25)
 	if err != nil {
 		return 0, fmt.Errorf("error fetching documents with autoOcrTag: %w", err)
@@ -439,6 +448,18 @@ func (app *App) processAutoOcrTagDocuments(ctx context.Context) (int, error) {
 
 		pagesDone, totalPages := jobStore.progress(jobID)
 		if err != nil {
+			if isRateLimitError(err) {
+				cooldownDuration := 1 * time.Hour
+				until := time.Now().Add(cooldownDuration)
+
+				app.autoOcrCooldownMu.Lock()
+				app.autoOcrCooldownUntil = until
+				app.autoOcrCooldownMu.Unlock()
+
+				docLogger.Warnf("Auto-OCR hit rate/quota limit (%v); pausing auto-OCR for %v (until %v). Auto-tagging will continue.", err, cooldownDuration, until.Format(time.RFC3339))
+				return successCount, nil
+			}
+
 			docLogger.Errorf("OCR processing failed: %v", err)
 			jobStore.updateJobStatus(jobID, "failed", err.Error())
 			finishOCRRunLogged(app, jobID, "failed", err.Error(), pagesDone, totalPages, "", "")

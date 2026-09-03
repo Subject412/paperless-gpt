@@ -136,6 +136,19 @@ func TestParseCommaSeparated(t *testing.T) {
 	}
 }
 
+func TestTruncateForLog(t *testing.T) {
+	shortStr := "short string"
+	if res := TruncateForLog(shortStr, 50); res != shortStr {
+		t.Errorf("TruncateForLog(%q, 50) = %q, want %q", shortStr, res, shortStr)
+	}
+
+	longStr := "abcdefghijklmnopqrstuvwxyz"
+	expected := "abcdefghij... [truncated 16 chars]"
+	if res := TruncateForLog(longStr, 10); res != expected {
+		t.Errorf("TruncateForLog(%q, 10) = %q, want %q", longStr, res, expected)
+	}
+}
+
 func TestParseSemicolonSeparated(t *testing.T) {
 	tests := []struct {
 		input    string

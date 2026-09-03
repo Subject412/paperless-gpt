@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"paperless-gpt/sanitize"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -156,13 +157,13 @@ func (client *PaperlessClient) Do(ctx context.Context, method, path string, body
 				"method":       method,
 				"content-type": contentType,
 				"status-code":  resp.StatusCode,
-				"response":     string(bodyBytes),
+				"response":     sanitize.TruncateForLog(string(bodyBytes), 300),
 				"base-url":     client.BaseURL,
 				"request-path": path,
 				"full-headers": resp.Header,
 			}).Error("Received HTML response for API request")
 
-			return nil, fmt.Errorf("received HTML response instead of JSON (status: %d). This often indicates an SSL/TLS issue or invalid authentication. Check your PAPERLESS_URL, PAPERLESS_TOKEN and PAPERLESS_INSECURE_SKIP_VERIFY settings. Full response: %s", resp.StatusCode, string(bodyBytes))
+			return nil, fmt.Errorf("received HTML response instead of JSON (status: %d). This often indicates an SSL/TLS issue or invalid authentication. Check your PAPERLESS_URL, PAPERLESS_TOKEN and PAPERLESS_INSECURE_SKIP_VERIFY settings. Full response: %s", resp.StatusCode, sanitize.TruncateForLog(string(bodyBytes), 300))
 		}
 	}
 
@@ -799,7 +800,7 @@ func (client *PaperlessClient) UpdateDocuments(ctx context.Context, documents []
 			}
 
 			partialDroppedFields = append(partialDroppedFields, newlyDropped...)
-			log.Warnf("Document %d: paperless-ngx rejected fields %v on attempt %d/%d; retrying without them. Raw response: %s", documentID, newlyDropped, attempt+1, maxRetries+1, string(bodyBytes))
+			log.Warnf("Document %d: paperless-ngx rejected fields %v on attempt %d/%d; retrying without them. Raw response: %s", documentID, newlyDropped, attempt+1, maxRetries+1, sanitize.TruncateForLog(string(bodyBytes), 300))
 		}
 
 		if !patchSucceeded {

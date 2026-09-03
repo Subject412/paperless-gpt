@@ -144,6 +144,8 @@ type App struct {
 	ocrFailures          ocrFailureTracker // Per-document OCR failure counts for the auto-OCR poll
 	autoTagCooldownUntil time.Time         // Time until auto-tagging is paused due to rate limiting
 	autoTagCooldownMu    sync.RWMutex      // Mutex protecting autoTagCooldownUntil
+	autoOcrCooldownUntil time.Time         // Time until auto-OCR is paused due to rate limiting
+	autoOcrCooldownMu    sync.RWMutex      // Mutex protecting autoOcrCooldownUntil
 }
 
 func main() {
@@ -304,6 +306,7 @@ func main() {
 		VisionLLMProvider:          visionLlmProvider,
 		VisionLLMModel:             visionLlmModel,
 		VisionLLMPrompt:            ocrPrompt,
+		VisionLLMRequestInterval:   visionRateLimitConfig.RequestInterval,
 		VisionLLMRequestsPerMinute: visionRateLimitConfig.RequestsPerMinute,
 		VisionLLMMaxRetries:        visionRateLimitConfig.MaxRetries,
 		VisionLLMBackoffMaxWait:    visionRateLimitConfig.BackoffMaxWait,
@@ -1001,34 +1004,57 @@ func getRateLimitConfig(isVision bool) RateLimitConfig {
 		prefix = "VISION_LLM_"
 	}
 
-	// Read environment variables with appropriate prefix
+	rateStr := os.Getenv(prefix + "REQUEST_RATE")
 	rpmStr := os.Getenv(prefix + "REQUESTS_PER_MINUTE")
 	maxRetriesStr := os.Getenv(prefix + "MAX_RETRIES")
 	backoffMaxWaitStr := os.Getenv(prefix + "BACKOFF_MAX_WAIT")
 
-	// Default values
-	var rpm float64 = 120                 // Default to 120 requests per minute (2/second)
-	var maxRetries int = 3                // Default to 3 retries
-	var backoffMaxWait = 30 * time.Second // Default to 30 seconds
+	var interval time.Duration
+	var rpm float64
 
-	// Parse values if provided
-	if rpmStr != "" {
-		if parsed, err := strconv.ParseFloat(rpmStr, 64); err == nil {
-			rpm = parsed
+	if rateStr != "" {
+		parsedInterval, err := ocr.ParseRateInterval(rateStr)
+		if err != nil {
+			log.Warnf("Invalid %sREQUEST_RATE value %q: %v, defaulting to 500ms", prefix, rateStr, err)
+			interval = 500 * time.Millisecond
+		} else {
+			interval = parsedInterval
 		}
+	} else if rpmStr != "" {
+		log.Warnf("%sREQUESTS_PER_MINUTE is deprecated. Please use %sREQUEST_RATE instead (e.g. '500ms', '30m', '2/h').", prefix, prefix)
+		if parsedRPM, err := strconv.ParseFloat(rpmStr, 64); err == nil && parsedRPM > 0 {
+			rpm = parsedRPM
+			interval = time.Duration(float64(time.Minute) / parsedRPM)
+		} else {
+			interval = 500 * time.Millisecond
+		}
+	} else {
+		// Default to 500ms interval (~120 requests/minute)
+		interval = 500 * time.Millisecond
 	}
+
+	if interval > 0 {
+		rpm = 60.0 / interval.Seconds()
+	}
+
+	maxRetries := 3
 	if maxRetriesStr != "" {
 		if parsed, err := strconv.Atoi(maxRetriesStr); err == nil {
 			maxRetries = parsed
 		}
 	}
+
+	backoffMaxWait := 30 * time.Second
 	if backoffMaxWaitStr != "" {
-		if parsed, err := time.ParseDuration(backoffMaxWaitStr); err == nil {
+		if parsed, err := ocr.ParseDuration(backoffMaxWaitStr); err == nil && parsed > 0 {
 			backoffMaxWait = parsed
+		} else if err != nil {
+			log.Warnf("Invalid %sBACKOFF_MAX_WAIT value %q: %v, using default (30s)", prefix, backoffMaxWaitStr, err)
 		}
 	}
 
 	return RateLimitConfig{
+		RequestInterval:   interval,
 		RequestsPerMinute: rpm,
 		MaxRetries:        maxRetries,
 		BackoffMaxWait:    backoffMaxWait,

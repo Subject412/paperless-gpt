@@ -80,6 +80,7 @@ type Config struct {
 	DoclingOCREngine       string // Optional, defaults to "easyocr", if DoclingOCRPipeline == "standard"
 
 	// Rate limiting settings for Vision LLM OCR
+	VisionLLMRequestInterval   time.Duration
 	VisionLLMRequestsPerMinute float64
 	VisionLLMMaxRetries        int
 	VisionLLMBackoffMaxWait    time.Duration

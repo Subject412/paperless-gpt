@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"paperless-gpt/sanitize"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -151,7 +152,7 @@ func (p *DoclingProvider) ProcessImage(ctx context.Context, imageContent []byte,
 	if resp.StatusCode != http.StatusOK {
 		logger.WithFields(logrus.Fields{
 			"status_code": resp.StatusCode,
-			"response":    string(respBodyBytes),
+			"response":    sanitize.TruncateForLog(string(respBodyBytes), 300),
 		}).Error("Received non-OK status from Docling")
 		return nil, fmt.Errorf("docling API returned status %d: %s", resp.StatusCode, string(respBodyBytes))
 	}
@@ -159,7 +160,7 @@ func (p *DoclingProvider) ProcessImage(ctx context.Context, imageContent []byte,
 	// Parse JSON response
 	var doclingResp DoclingConvertResponse
 	if err := json.Unmarshal(respBodyBytes, &doclingResp); err != nil {
-		logger.WithError(err).WithField("response", string(respBodyBytes)).Error("Failed to parse Docling JSON response")
+		logger.WithError(err).WithField("response", sanitize.TruncateForLog(string(respBodyBytes), 300)).Error("Failed to parse Docling JSON response")
 		return nil, fmt.Errorf("error parsing Docling JSON response: %w", err)
 	}
 
@@ -187,7 +188,7 @@ func (p *DoclingProvider) ProcessImage(ctx context.Context, imageContent []byte,
 			"response_status": doclingResp.Status,
 		}).Warn("Received empty text and markdown content from Docling")
 		// Log more details about the response to help debug
-		logger.WithField("raw_response", string(respBodyBytes)).Debug("Raw Docling response")
+		logger.WithField("raw_response", sanitize.TruncateForLog(string(respBodyBytes), 300)).Debug("Raw Docling response")
 	}
 
 	result := &OCRResult{
