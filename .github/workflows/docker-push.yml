@@ -1,34 +1,79 @@
-name: Build and Push Docker Image
+name: Build, Release and Push Docker Image
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: write   # Required to create git tags and GitHub Releases
+  packages: write   # Required to push to GHCR
+
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full history needed for versioning & release notes
 
+      # 1. Determine next SemVer and create the git tag (e.g. v1.0.1)
+      - name: Bump version and push tag
+        id: tag_version
+        uses: anothrNick/github-tag-action@1.71.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WITH_V: true
+          DEFAULT_BUMP: patch
+
+      # 2. Setup build tools
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Convert repository name to lowercase
-        run: |
-          echo "REPO_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-
+      # 3. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: subject928
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      # 4. Log in to GitHub Container Registry (ghcr.io)
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 5. Extract metadata and prepare image tags
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            subject928/paperless-gpt
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.tag_version.outputs.new_tag }}
+            type=sha,format=short
+
+      # 6. Build and push Docker images to both registries
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            subject928/paperless-gpt:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # 7. Create formal GitHub Release (runs only after Docker push succeeds)
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
