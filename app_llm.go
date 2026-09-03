@@ -660,7 +660,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// Titles
 	if suggestionRequest.GenerateTitles {
-		docLogger.Printf("Suggested title for document %d: %s", documentID, suggestedTitle)
+		docLogger.Infof("Suggested title for document %d: %s", documentID, sanitize.TruncateForLog(suggestedTitle, 100))
 		suggestion.SuggestedTitle = suggestedTitle
 	} else {
 		suggestion.SuggestedTitle = doc.Title
@@ -668,7 +668,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// Tags
 	if suggestionRequest.GenerateTags {
-		docLogger.Printf("Suggested tags for document %d: %v", documentID, suggestedTags)
+		docLogger.Infof("Suggested tags for document %d: %v", documentID, suggestedTags)
 		suggestion.SuggestedTags = suggestedTags
 	} else {
 		suggestion.SuggestedTags = doc.Tags
@@ -676,7 +676,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// Correspondents
 	if suggestionRequest.GenerateCorrespondents {
-		log.Printf("Suggested correspondent for document %d: %s", documentID, suggestedCorrespondent)
+		log.Infof("Suggested correspondent for document %d: %s", documentID, sanitize.TruncateForLog(suggestedCorrespondent, 100))
 		suggestion.SuggestedCorrespondent = suggestedCorrespondent
 	} else {
 		suggestion.SuggestedCorrespondent = ""
@@ -684,7 +684,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// Document Type
 	if suggestionRequest.GenerateDocumentTypes {
-		log.Printf("Suggested document type for document %d: %s", documentID, suggestedDocumentType)
+		log.Infof("Suggested document type for document %d: %s", documentID, sanitize.TruncateForLog(suggestedDocumentType, 100))
 		suggestion.SuggestedDocumentType = suggestedDocumentType
 	} else {
 		suggestion.SuggestedDocumentType = ""
@@ -692,7 +692,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// CreatedDate
 	if suggestionRequest.GenerateCreatedDate {
-		log.Printf("Suggested createdDate for document %d: %s", documentID, suggestedCreatedDate)
+		log.Infof("Suggested createdDate for document %d: %s", documentID, suggestedCreatedDate)
 		suggestion.SuggestedCreatedDate = suggestedCreatedDate
 	} else {
 		suggestion.SuggestedCreatedDate = ""
@@ -700,7 +700,7 @@ func (app *App) generateSingleDocumentSuggestion(ctx context.Context, suggestion
 
 	// Custom Fields
 	if suggestionRequest.GenerateCustomFields {
-		log.Printf("Suggested custom fields for document %d: %v", documentID, suggestedCustomFields)
+		log.Infof("Suggested custom fields for document %d: %v", documentID, suggestedCustomFields)
 		suggestion.SuggestedCustomFields = suggestedCustomFields
 	}
 
