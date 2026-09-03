@@ -21,6 +21,7 @@ import (
 	"github.com/Masterminds/sprig/v3"
 	"github.com/fatih/color"
 	"github.com/gin-gonic/gin"
+	pdfcpulog "github.com/pdfcpu/pdfcpu/pkg/log"
 	"github.com/sirupsen/logrus"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
@@ -146,6 +147,10 @@ type App struct {
 	autoTagCooldownMu    sync.RWMutex      // Mutex protecting autoTagCooldownUntil
 	autoOcrCooldownUntil time.Time         // Time until auto-OCR is paused due to rate limiting
 	autoOcrCooldownMu    sync.RWMutex      // Mutex protecting autoOcrCooldownUntil
+}
+
+func init() {
+	pdfcpulog.DisableLoggers()
 }
 
 func main() {
