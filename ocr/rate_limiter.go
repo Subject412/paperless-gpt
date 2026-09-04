@@ -229,12 +229,40 @@ func NewRateLimitedLLM(llm llms.Model, config RateLimitConfig) *RateLimitedLLM {
 	}
 }
 
+func (r *RateLimitedLLM) reserveAndWait(ctx context.Context) error {
+	if r.rateLimiter == nil {
+		return nil
+	}
+
+	now := time.Now()
+	res := r.rateLimiter.ReserveN(now, 1)
+	if !res.OK() {
+		return fmt.Errorf("rate limiter reservation failed: burst limit exceeded")
+	}
+
+	delay := res.DelayFrom(now)
+	if delay > 0 {
+		waitDuration := delay.Round(time.Second)
+		if waitDuration < time.Second {
+			waitDuration = delay
+		}
+		log.WithField("wait_time", waitDuration.String()).Infof("Rate limit in effect: waiting %v before sending request...", waitDuration)
+		t := time.NewTimer(delay)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			res.CancelAt(time.Now())
+			return ctx.Err()
+		case <-t.C:
+		}
+	}
+	return nil
+}
+
 // Call implements the llms.Model interface
 func (r *RateLimitedLLM) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
-	if r.rateLimiter != nil {
-		if err := r.rateLimiter.Wait(ctx); err != nil {
-			return "", fmt.Errorf("rate limiter wait failed: %w", err)
-		}
+	if err := r.reserveAndWait(ctx); err != nil {
+		return "", err
 	}
 
 	var lastErr error
@@ -271,10 +299,8 @@ func (r *RateLimitedLLM) Call(ctx context.Context, prompt string, options ...llm
 
 // GenerateContent implements the llms.Model interface
 func (r *RateLimitedLLM) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
-	if r.rateLimiter != nil {
-		if err := r.rateLimiter.Wait(ctx); err != nil {
-			return nil, fmt.Errorf("rate limiter wait failed: %w", err)
-		}
+	if err := r.reserveAndWait(ctx); err != nil {
+		return nil, err
 	}
 
 	var lastErr error
